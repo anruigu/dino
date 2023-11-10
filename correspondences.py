@@ -1,7 +1,7 @@
 import argparse
 import torch
 from pathlib import Path
-from extractor import ViTExtractor
+from .extractor import ViTExtractor
 from tqdm import tqdm
 import numpy as np
 from sklearn.cluster import KMeans
@@ -11,42 +11,42 @@ from matplotlib.colors import ListedColormap
 from typing import List, Tuple
 
 
-def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10, load_size: int = 224, layer: int = 9,
+# def save_correspondence_points(image_path1, image_path2, points1, points2, save_path="data/points_to_track/"):
+#     filename1 = str(image_path1).split('/')[-1].split('.')[0]  # assuming there's a file extension
+#     filename2 = str(image_path2).split('/')[-1].split('.')[0]
+#     # Extract filenames from image paths
+#     points1_array = np.array([(x, y) for y, x in points1])
+#     points2_array = np.array([(x, y) for y, x in points2])
+
+    # Save the arrays to a file
+    # with open(save_path + '{}_{}.npz'.format(filename1, filename2), 'wb') as f:
+    #     np.savez(f, **{filename1: points1_array, filename2: points2_array})
+
+    # return points1_array, points2_array
+
+def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_pairs: int = 10, load_size: int = 512, layer: int = 9,
                          facet: str = 'key', bin: bool = True, thresh: float = 0.05, model_type: str = 'dino_vits8',
                          stride: int = 4) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]],
                                                                               Image.Image, Image.Image]:
-    """
-    finding point correspondences between two images.
-    :param image_path1: path to the first image.
-    :param image_path2: path to the second image.
-    :param num_pairs: number of outputted corresponding pairs.
-    :param load_size: size of the smaller edge of loaded images. If None, does not resize.
-    :param layer: layer to extract descriptors from.
-    :param facet: facet to extract descriptors from.
-    :param bin: if True use a log-binning descriptor.
-    :param thresh: threshold of saliency maps to distinguish fg and bg.
-    :param model_type: type of model to extract descriptors from.
-    :param stride: stride of the model.
-    :return: list of points from image_path1, list of corresponding points from image_path2, the processed pil image of
-    image_path1, and the processed pil image of image_path2.
-    """
     # extracting descriptors for each image
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print("using device: ", device)
     extractor = ViTExtractor(model_type, stride, device=device)
-    image1_batch, image1_pil = extractor.preprocess(image_path1, load_size)
+
+    image1_batch, image1_pil = extractor.preprocess_pil(image1, load_size)
     descriptors1 = extractor.extract_descriptors(image1_batch.to(device), layer, facet, bin)
     num_patches1, load_size1 = extractor.num_patches, extractor.load_size
-    image2_batch, image2_pil = extractor.preprocess(image_path2, load_size)
+    image2_batch, image2_pil = extractor.preprocess_pil(image2, load_size)
     descriptors2 = extractor.extract_descriptors(image2_batch.to(device), layer, facet, bin)
     num_patches2, load_size2 = extractor.num_patches, extractor.load_size
-
+    
     # extracting saliency maps for each image
     saliency_map1 = extractor.extract_saliency_maps(image1_batch.to(device))[0]
     saliency_map2 = extractor.extract_saliency_maps(image2_batch.to(device))[0]
     # threshold saliency maps to get fg / bg masks
     fg_mask1 = saliency_map1 > thresh
     fg_mask2 = saliency_map2 > thresh
-
+    
     # calculate similarity between image1 and image2 descriptors
     similarities = chunk_cosine_sim(descriptors1, descriptors2)
 
@@ -107,7 +107,113 @@ def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10
         y2_show = (int(y2) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
+
+    #points1_array, points2_array = save_correspondence_points(name1, name2, points1, points2)
+
     return points1, points2, image1_pil, image2_pil
+
+def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10, load_size: int = 512, layer: int = 9,
+                         facet: str = 'key', bin: bool = True, thresh: float = 0.05, model_type: str = 'dino_vits8',
+                         stride: int = 4) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]],
+                                                                              Image.Image, Image.Image]:
+    """
+    finding point correspondences between two images.
+    :param image_path1: path to the first image.
+    :param image_path2: path to the second image.
+    :param num_pairs: number of outputted corresponding pairs.
+    :param load_size: size of the smaller edge of loaded images. If None, does not resize.
+    :param layer: layer to extract descriptors from.
+    :param facet: facet to extract descriptors from.
+    :param bin: if True use a log-binning descriptor.
+    :param thresh: threshold of saliency maps to distinguish fg and bg.
+    :param model_type: type of model to extract descriptors from.
+    :param stride: stride of the model.
+    :return: list of points from image_path1, list of corresponding points from image_path2, the processed pil image of
+    image_path1, and the processed pil image of image_path2.
+    """
+    # extracting descriptors for each image
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print("using device: ", device)
+    extractor = ViTExtractor(model_type, stride, device=device)
+
+    image1_batch, image1_pil = extractor.preprocess(image_path1, load_size)
+    descriptors1 = extractor.extract_descriptors(image1_batch.to(device), layer, facet, bin)
+    num_patches1, load_size1 = extractor.num_patches, extractor.load_size
+    image2_batch, image2_pil = extractor.preprocess(image_path2, load_size)
+    descriptors2 = extractor.extract_descriptors(image2_batch.to(device), layer, facet, bin)
+    num_patches2, load_size2 = extractor.num_patches, extractor.load_size
+    
+    # extracting saliency maps for each image
+    saliency_map1 = extractor.extract_saliency_maps(image1_batch.to(device))[0]
+    saliency_map2 = extractor.extract_saliency_maps(image2_batch.to(device))[0]
+    # threshold saliency maps to get fg / bg masks
+    fg_mask1 = saliency_map1 > thresh
+    fg_mask2 = saliency_map2 > thresh
+    
+    # calculate similarity between image1 and image2 descriptors
+    similarities = chunk_cosine_sim(descriptors1, descriptors2)
+
+    # calculate best buddies
+    image_idxs = torch.arange(num_patches1[0] * num_patches1[1], device=device)
+    sim_1, nn_1 = torch.max(similarities, dim=-1)  # nn_1 - indices of block2 closest to block1
+    sim_2, nn_2 = torch.max(similarities, dim=-2)  # nn_2 - indices of block1 closest to block2
+    sim_1, nn_1 = sim_1[0, 0], nn_1[0, 0]
+    sim_2, nn_2 = sim_2[0, 0], nn_2[0, 0]
+    bbs_mask = nn_2[nn_1] == image_idxs
+
+    # remove best buddies where at least one descriptor is marked bg by saliency mask.
+    fg_mask2_new_coors = nn_2[fg_mask2]
+    fg_mask2_mask_new_coors = torch.zeros(num_patches1[0] * num_patches1[1], dtype=torch.bool, device=device)
+    fg_mask2_mask_new_coors[fg_mask2_new_coors] = True
+    bbs_mask = torch.bitwise_and(bbs_mask, fg_mask1)
+    bbs_mask = torch.bitwise_and(bbs_mask, fg_mask2_mask_new_coors)
+
+    # applying k-means to extract k high quality well distributed correspondence pairs
+    bb_descs1 = descriptors1[0, 0, bbs_mask, :].cpu().numpy()
+    bb_descs2 = descriptors2[0, 0, nn_1[bbs_mask], :].cpu().numpy()
+    # apply k-means on a concatenation of a pairs descriptors.
+    all_keys_together = np.concatenate((bb_descs1, bb_descs2), axis=1)
+    n_clusters = min(num_pairs, len(all_keys_together))  # if not enough pairs, show all found pairs.
+    length = np.sqrt((all_keys_together ** 2).sum(axis=1))[:, None]
+    normalized = all_keys_together / length
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(normalized)
+    bb_topk_sims = np.full((n_clusters), -np.inf)
+    bb_indices_to_show = np.full((n_clusters), -np.inf)
+
+    # rank pairs by their mean saliency value
+    bb_cls_attn1 = saliency_map1[bbs_mask]
+    bb_cls_attn2 = saliency_map2[nn_1[bbs_mask]]
+    bb_cls_attn = (bb_cls_attn1 + bb_cls_attn2) / 2
+    ranks = bb_cls_attn
+
+    for k in range(n_clusters):
+        for i, (label, rank) in enumerate(zip(kmeans.labels_, ranks)):
+            if rank > bb_topk_sims[label]:
+                bb_topk_sims[label] = rank
+                bb_indices_to_show[label] = i
+
+    # get coordinates to show
+    indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[
+        bb_indices_to_show]  # close bbs
+    img1_indices_to_show = torch.arange(num_patches1[0] * num_patches1[1], device=device)[indices_to_show]
+    img2_indices_to_show = nn_1[indices_to_show]
+    # coordinates in descriptor map's dimensions
+    img1_y_to_show = (img1_indices_to_show / num_patches1[1]).cpu().numpy()
+    img1_x_to_show = (img1_indices_to_show % num_patches1[1]).cpu().numpy()
+    img2_y_to_show = (img2_indices_to_show / num_patches2[1]).cpu().numpy()
+    img2_x_to_show = (img2_indices_to_show % num_patches2[1]).cpu().numpy()
+    points1, points2 = [], []
+    for y1, x1, y2, x2 in zip(img1_y_to_show, img1_x_to_show, img2_y_to_show, img2_x_to_show):
+        x1_show = (int(x1) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y1_show = (int(y1) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        x2_show = (int(x2) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y2_show = (int(y2) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        points1.append((y1_show, x1_show))
+        points2.append((y2_show, x2_show))
+
+    points1_array, points2_array = save_correspondence_points(image_path1, image_path2, points1, points2)
+
+    return points1, points2, image1_pil, image2_pil, points1_array, points2_array, points1_array, points2_array
 
 
 def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple[float, float]],
@@ -128,12 +234,12 @@ def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple
     ax2.axis('off')
     ax1.imshow(image1)
     ax2.imshow(image2)
-    if num_points > 15:
-        cmap = plt.get_cmap('tab10')
-    else:
-        cmap = ListedColormap(["red", "yellow", "blue", "lime", "magenta", "indigo", "orange", "cyan", "darkgreen",
-                               "maroon", "black", "white", "chocolate", "gray", "blueviolet"])
-    colors = np.array([cmap(x) for x in range(num_points)])
+    # if num_points > 15:
+    #     cmap = plt.get_cmap('tab10')
+    # else:
+    cmap = ListedColormap(["red", "yellow", "blue", "lime", "magenta", "indigo", "orange", "cyan", "darkgreen",
+                            "maroon", "black", "white", "chocolate", "gray", "blueviolet"])
+    colors = np.array([cmap(x % 15) for x in range(num_points)])
     radius1, radius2 = 8, 1
     for point1, point2, color in zip(points1, points2, colors):
         y1, x1 = point1
@@ -175,7 +281,39 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+    
+def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_pairs=5, load_size=224, layer=9, 
+                                                    facet='key', bin=True, thresh=0.05) -> Tuple[np.ndarray, np.ndarray]:
+    with torch.no_grad():
+        # compute point correspondences
+        points1, points2, image1_pil, image2_pil = find_correspondences_images(
+            image1_pil, image2_pil,name1,name2, num_pairs, load_size, layer, facet, bin, thresh)
+        
+        points1_array = np.array([(x, y) for y, x in points1])
+        np.save("data/points_to_track/{}.npy".format(name1), points1_array)
+        points2_array = np.array([(x, y) for y, x in points2])
+        np.save("data/points_to_track/{}.npy".format(name2), points2_array)
 
+        curr_save_dir = Path("dino/logs/") / f"{name1}_{name2}"
+        curr_save_dir.mkdir(parents=True, exist_ok=True)
+
+        # saving point correspondences
+        file1 = open(curr_save_dir / "correspondence_A.txt", "w")
+        file2 = open(curr_save_dir / "correspondence_B.txt", "w")
+        for point1, point2 in zip(points1, points2):
+            file1.write(f'{point1}\n')
+            file2.write(f'{point2}\n')
+        file1.close()
+        file2.close()
+
+        fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
+        fig1.savefig(curr_save_dir / '{}_corresp.png'.format(name1), bbox_inches='tight', pad_inches=0)
+        fig2.savefig(curr_save_dir / '{}_corresp.png'.format(name2), bbox_inches='tight', pad_inches=0)
+        plt.close('all')
+    
+    return points1_array, points2_array
+
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Facilitate ViT Descriptor point correspondences.')
@@ -212,12 +350,12 @@ if __name__ == "__main__":
             curr_save_dir.mkdir(parents=True, exist_ok=True)
 
             # compute point correspondences
-            points1, points2, image1_pil, image2_pil = find_correspondences(curr_images[0], curr_images[1],
+            points1, points2, image1_pil, image2_pil, points1array, points2_array = find_correspondences(curr_images[0], curr_images[1],
                                                                             args.num_pairs, args.load_size, args.layer,
                                                                             args.facet, args.bin, args.thresh)
             # saving point correspondences
             file1 = open(curr_save_dir / "correspondence_A.txt", "w")
-            file2 = open(curr_save_dir / "correspondence_Bt.txt", "w")
+            file2 = open(curr_save_dir / "correspondence_B.txt", "w")
             for point1, point2 in zip(points1, points2):
                 file1.write(f'{point1}\n')
                 file2.write(f'{point2}\n')
