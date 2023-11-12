@@ -11,19 +11,6 @@ from matplotlib.colors import ListedColormap
 from typing import List, Tuple
 
 
-# def save_correspondence_points(image_path1, image_path2, points1, points2, save_path="data/points_to_track/"):
-#     filename1 = str(image_path1).split('/')[-1].split('.')[0]  # assuming there's a file extension
-#     filename2 = str(image_path2).split('/')[-1].split('.')[0]
-#     # Extract filenames from image paths
-#     points1_array = np.array([(x, y) for y, x in points1])
-#     points2_array = np.array([(x, y) for y, x in points2])
-
-    # Save the arrays to a file
-    # with open(save_path + '{}_{}.npz'.format(filename1, filename2), 'wb') as f:
-    #     np.savez(f, **{filename1: points1_array, filename2: points2_array})
-
-    # return points1_array, points2_array
-
 def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_pairs: int = 10, load_size: int = 512, layer: int = 9,
                          facet: str = 'key', bin: bool = True, thresh: float = 0.05, model_type: str = 'dino_vits8',
                          stride: int = 4) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]],
@@ -39,7 +26,7 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
     image2_batch, image2_pil = extractor.preprocess_pil(image2, load_size)
     descriptors2 = extractor.extract_descriptors(image2_batch.to(device), layer, facet, bin)
     num_patches2, load_size2 = extractor.num_patches, extractor.load_size
-    
+
     # extracting saliency maps for each image
     saliency_map1 = extractor.extract_saliency_maps(image1_batch.to(device))[0]
     saliency_map2 = extractor.extract_saliency_maps(image2_batch.to(device))[0]
@@ -108,9 +95,10 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
 
-    #points1_array, points2_array = save_correspondence_points(name1, name2, points1, points2)
+    return points1, points2, image1_pil, image2_pil, bb_descs1
 
-    return points1, points2, image1_pil, image2_pil
+
+
 
 def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10, load_size: int = 512, layer: int = 9,
                          facet: str = 'key', bin: bool = True, thresh: float = 0.05, model_type: str = 'dino_vits8',
@@ -282,12 +270,13 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
     
+    
 def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_pairs=5, load_size=224, layer=9, 
                                                     facet='key', bin=True, thresh=0.05) -> Tuple[np.ndarray, np.ndarray]:
     with torch.no_grad():
         # compute point correspondences
         points1, points2, image1_pil, image2_pil = find_correspondences_images(
-            image1_pil, image2_pil,name1,name2, num_pairs, load_size, layer, facet, bin, thresh)
+            image1_pil, image2_pil, name1, name2, num_pairs, load_size, layer, facet, bin, thresh)
         
         points1_array = np.array([(x, y) for y, x in points1])
         np.save("data/points_to_track/{}.npy".format(name1), points1_array)
