@@ -70,6 +70,15 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
     bb_cls_attn = (bb_cls_attn1 + bb_cls_attn2) / 2
     ranks = bb_cls_attn
 
+    _, sorted_indices = torch.sort(bb_cls_attn, descending=True)
+    # sorted_indices = np.argsort(-bb_cls_attn)
+
+    # Select the top 'k' indices
+    top_k_indices = sorted_indices[:num_pairs].cpu().numpy()
+
+    # Select the top 'k' descriptors from bb_descs1
+    top_k_bb_descs1 = bb_descs1[top_k_indices]
+
     for k in range(n_clusters):
         for i, (label, rank) in enumerate(zip(kmeans.labels_, ranks)):
             if rank > bb_topk_sims[label]:
@@ -95,7 +104,7 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
 
-    return points1, points2, image1_pil, image2_pil, bb_descs1
+    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1
 
 
 
@@ -199,9 +208,9 @@ def find_correspondences(image_path1: str, image_path2: str, num_pairs: int = 10
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
 
-    points1_array, points2_array = save_correspondence_points(image_path1, image_path2, points1, points2)
+    #points1_array, points2_array = save_correspondence_points(image_path1, image_path2, points1, points2)
 
-    return points1, points2, image1_pil, image2_pil, points1_array, points2_array, points1_array, points2_array
+    return points1, points2, image1_pil, image2_pil
 
 
 def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple[float, float]],
@@ -275,7 +284,7 @@ def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_p
                                                     facet='key', bin=True, thresh=0.05) -> Tuple[np.ndarray, np.ndarray]:
     with torch.no_grad():
         # compute point correspondences
-        points1, points2, image1_pil, image2_pil = find_correspondences_images(
+        points1, points2, image1_pil, image2_pil, anchor_desc = find_correspondences_images(
             image1_pil, image2_pil, name1, name2, num_pairs, load_size, layer, facet, bin, thresh)
         
         points1_array = np.array([(x, y) for y, x in points1])
@@ -300,7 +309,7 @@ def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_p
         fig2.savefig(curr_save_dir / '{}_corresp.png'.format(name2), bbox_inches='tight', pad_inches=0)
         plt.close('all')
     
-    return points1_array, points2_array
+    return points1_array, points2_array, anchor_desc
 
     
 
@@ -339,7 +348,7 @@ if __name__ == "__main__":
             curr_save_dir.mkdir(parents=True, exist_ok=True)
 
             # compute point correspondences
-            points1, points2, image1_pil, image2_pil, points1array, points2_array = find_correspondences(curr_images[0], curr_images[1],
+            points1, points2, image1_pil, image2_pil = find_correspondences(curr_images[0], curr_images[1],
                                                                             args.num_pairs, args.load_size, args.layer,
                                                                             args.facet, args.bin, args.thresh)
             # saving point correspondences

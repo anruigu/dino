@@ -26,29 +26,33 @@ def find_correspondences_with_anchors(anchor_descriptors: np.ndarray, image2: Im
 
     # Convert anchor_descriptors to a tensor and normalize
     anchor_descriptors_tensor = torch.from_numpy(anchor_descriptors).to(device)
+    anchor_descriptors_tensor = anchor_descriptors_tensor.view(1, 1, -1, anchor_descriptors_tensor.shape[-1])
+
+    # Normalize the anchor descriptors
     anchor_length = torch.sqrt((anchor_descriptors_tensor ** 2).sum(axis=1))[:, None]
     normalized_anchors = anchor_descriptors_tensor / anchor_length
 
     # Calculate similarities and find best matches for each anchor descriptor
-    similarities = chunk_cosine_sim(normalized_anchors, descriptors2)
-    _, best_matches = torch.topk(similarities, num_pairs, dim=-1)
+    similarities = chunk_cosine_sim(normalized_anchors, descriptors2)[0][0]
 
+    # _, best_matches = torch.topk(similarities, num_pairs, dim=-1)
+    _, best_matches = torch.max(similarities, dim=-1)
+    
     # Extract coordinates of the matched points in image2
     points2 = []
-    for i in range(num_pairs):
-        img2_indices = best_matches[:, i]
-        img2_y = (img2_indices / num_patches2[1]).cpu().numpy()
-        img2_x = (img2_indices % num_patches2[1]).cpu().numpy()
+    for i in range(num_pairs): # iterate over each descriptor
+        img2_indices = best_matches[i] # find the image_2 indices that bes match these
+        y = (img2_indices / num_patches2[1]).cpu().numpy()
+        x = (img2_indices % num_patches2[1]).cpu().numpy()
         
-        for y, x in zip(img2_y, img2_x):
-            x_show = (int(x) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-            y_show = (int(y) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
-            points2.append((y_show, x_show))
+        # for y, x in zip(img2_y, img2_x):
+        x_show = (int(x) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y_show = (int(y) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        points2.append((y_show, x_show))
 
     return points2, image2_pil
 
-def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple[float, float]],
-                         image1: Image.Image, image2: Image.Image) -> Tuple[plt.Figure, plt.Figure]:
+def draw_correspondences(points2: List[Tuple[float, float]], image2: Image.Image) -> Tuple[plt.Figure, plt.Figure]:
     """
     draw point correspondences on images.
     :param points1: a list of (y, x) coordinates of image1, corresponding to points2.
@@ -57,13 +61,9 @@ def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple
     :param image2: a PIL image.
     :return: two figures of images with marked points.
     """
-    assert len(points1) == len(points2), f"points lengths are incompatible: {len(points1)} != {len(points2)}."
-    num_points = len(points1)
-    fig1, ax1 = plt.subplots()
-    ax1.axis('off')
+    num_points = len(points2)
     fig2, ax2 = plt.subplots()
     ax2.axis('off')
-    ax1.imshow(image1)
     ax2.imshow(image2)
     # if num_points > 15:
     #     cmap = plt.get_cmap('tab10')
@@ -72,18 +72,13 @@ def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple
                             "maroon", "black", "white", "chocolate", "gray", "blueviolet"])
     colors = np.array([cmap(x % 15) for x in range(num_points)])
     radius1, radius2 = 8, 1
-    for point1, point2, color in zip(points1, points2, colors):
-        y1, x1 = point1
-        circ1_1 = plt.Circle((x1, y1), radius1, facecolor=color, edgecolor='white', alpha=0.5)
-        circ1_2 = plt.Circle((x1, y1), radius2, facecolor=color, edgecolor='white')
-        ax1.add_patch(circ1_1)
-        ax1.add_patch(circ1_2)
+    for point2, color in zip(points2, colors):
         y2, x2 = point2
         circ2_1 = plt.Circle((x2, y2), radius1, facecolor=color, edgecolor='white', alpha=0.5)
         circ2_2 = plt.Circle((x2, y2), radius2, facecolor=color, edgecolor='white')
         ax2.add_patch(circ2_1)
         ax2.add_patch(circ2_2)
-    return fig1, fig2
+    return fig2
 
 
 def chunk_cosine_sim(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -122,7 +117,7 @@ def process_new_image(anchor_descriptors, image2_pil: Image, anchor_name, name2,
         
         comb_name = anchor_name + "_" + name2
         points2_array = np.array([(x, y) for y, x in points2])
-        np.save(f"data/points_to_track/{comb_name}.npy", points2_array)
+        np.save(f"data/points_to_track/{name2}.npy", points2_array)
 
         curr_save_dir = Path("dino/logs/") / comb_name
         curr_save_dir.mkdir(parents=True, exist_ok=True)
