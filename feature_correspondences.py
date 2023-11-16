@@ -28,29 +28,42 @@ def find_correspondences_with_anchors(anchor_descriptors: np.ndarray, image2: Im
     anchor_descriptors_tensor = torch.from_numpy(anchor_descriptors).to(device)
     anchor_descriptors_tensor = anchor_descriptors_tensor.view(1, 1, -1, anchor_descriptors_tensor.shape[-1])
 
-    # Normalize the anchor descriptors
-    anchor_length = torch.sqrt((anchor_descriptors_tensor ** 2).sum(axis=1))[:, None]
-    normalized_anchors = anchor_descriptors_tensor / anchor_length
+    # Normalize the descriptors2
+    # descriptors2_normalized = descriptors2 / np.linalg.norm(descriptors2, axis=1)[:, None]
+    descriptors2_normalized = descriptors2 / torch.norm(descriptors2, dim=1, keepdim=True)
 
     # Calculate similarities and find best matches for each anchor descriptor
-    similarities = chunk_cosine_sim(normalized_anchors, descriptors2)[0][0]
+    similarities = chunk_cosine_sim(anchor_descriptors_tensor, descriptors2_normalized)[0][0]
 
     # _, best_matches = torch.topk(similarities, num_pairs, dim=-1)
     _, best_matches = torch.max(similarities, dim=-1)
     
     # Extract coordinates of the matched points in image2
     points2 = []
-    for i in range(num_pairs): # iterate over each descriptor
-        img2_indices = best_matches[i] # find the image_2 indices that bes match these
-        y = (img2_indices / num_patches2[1]).cpu().numpy()
-        x = (img2_indices % num_patches2[1]).cpu().numpy()
+    # for i in range(num_pairs): # iterate over each descriptor
+    #     img2_indices = best_matches[i] # find the image_2 indices that bes match these
+    #     y = (img2_indices / num_patches2[1]).cpu().numpy()
+    #     x = (img2_indices % num_patches2[1]).cpu().numpy()
         
-        # for y, x in zip(img2_y, img2_x):
-        x_show = (int(x) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-        y_show = (int(y) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+    #     # for y, x in zip(img2_y, img2_x):
+    #     x_show = (int(x) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+    #     y_show = (int(y) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+    #     points2.append((y_show, x_show))
+    descriptors2_matched = []
+    for i in range(num_pairs):  # iterate over each descriptor
+        match_index = best_matches[i].item()  # find the index that best matches this descriptor
+        y, x = divmod(match_index, num_patches2[1])
+        
+        # Calculate the display coordinates
+        x_show = (x - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y_show = (y - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
         points2.append((y_show, x_show))
 
-    return points2, image2_pil
+        # Extract the matched descriptor
+        descriptors2_matched.append(descriptors2[:, :, match_index].cpu().numpy())
+    descriptors2_matched = np.array(descriptors2_matched).reshape(num_pairs, -1)
+
+    return points2, image2_pil, descriptors2_matched
 
 def draw_correspondences(points2: List[Tuple[float, float]], image2: Image.Image) -> Tuple[plt.Figure, plt.Figure]:
     """
@@ -112,7 +125,7 @@ def process_new_image(anchor_descriptors, image2_pil: Image, anchor_name, name2,
                   facet='key', bin=True, model_type='dino_vits8', stride=4) -> np.ndarray:
     with torch.no_grad():
         # compute point correspondences for the second image
-        points2, processed_image2_pil = find_correspondences_with_anchors(
+        points2, processed_image2_pil, desc2 = find_correspondences_with_anchors(
             anchor_descriptors, image2_pil, name2, num_pairs, load_size, layer, facet, bin, model_type, stride)
         
         comb_name = anchor_name + "_" + name2
@@ -133,4 +146,4 @@ def process_new_image(anchor_descriptors, image2_pil: Image, anchor_name, name2,
         fig2.savefig(curr_save_dir / f'{comb_name}_corresp.png', bbox_inches='tight', pad_inches=0)
         plt.close('all')
     
-    return points2_array
+    return points2_array, desc2

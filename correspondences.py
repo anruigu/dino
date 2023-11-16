@@ -78,6 +78,7 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
 
     # Select the top 'k' descriptors from bb_descs1
     top_k_bb_descs1 = bb_descs1[top_k_indices]
+    top_k_bb_descs1_normalized = top_k_bb_descs1 / np.linalg.norm(top_k_bb_descs1, axis=1)[:, None]
 
     for k in range(n_clusters):
         for i, (label, rank) in enumerate(zip(kmeans.labels_, ranks)):
@@ -103,8 +104,7 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
         y2_show = (int(y2) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
-
-    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1
+    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1_normalized
 
 
 
