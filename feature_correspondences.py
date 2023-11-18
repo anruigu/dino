@@ -122,7 +122,7 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
     
 def process_new_image(anchor_descriptors, image2_pil: Image, anchor_name, name2, num_pairs=5, load_size=224, layer=9, 
-                  facet='key', bin=True, model_type='dino_vits8', stride=4) -> np.ndarray:
+                  facet='key', bin=True, model_type='dino_vits8', stride=4, save=True) -> np.ndarray:
     with torch.no_grad():
         # compute point correspondences for the second image
         points2, processed_image2_pil, desc2 = find_correspondences_with_anchors(
@@ -130,16 +130,15 @@ def process_new_image(anchor_descriptors, image2_pil: Image, anchor_name, name2,
         
         comb_name = anchor_name + "_" + name2
         points2_array = np.array([(x, y) for y, x in points2])
-        np.save(f"data/points_to_track/{name2}.npy", points2_array)
 
         curr_save_dir = Path("dino/logs/") / comb_name
         curr_save_dir.mkdir(parents=True, exist_ok=True)
 
         # saving point correspondences for the second image
-        file2 = open(curr_save_dir / "correspondence_B.txt", "w")
-        for point2 in points2:
-            file2.write(f'{point2}\n')
-        file2.close()
+        # file2 = open(curr_save_dir / "correspondence_B.txt", "w")
+        # for point2 in points2:
+        #     file2.write(f'{point2}\n')
+        # file2.close()
 
         # drawing and saving correspondences for the second image
         fig2 = draw_correspondences(points2, processed_image2_pil)

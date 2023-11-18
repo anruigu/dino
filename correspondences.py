@@ -237,7 +237,7 @@ def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple
     cmap = ListedColormap(["red", "yellow", "blue", "lime", "magenta", "indigo", "orange", "cyan", "darkgreen",
                             "maroon", "black", "white", "chocolate", "gray", "blueviolet"])
     colors = np.array([cmap(x % 15) for x in range(num_points)])
-    radius1, radius2 = 8, 1
+    radius1, radius2 = 4, 1
     for point1, point2, color in zip(points1, points2, colors):
         y1, x1 = point1
         circ1_1 = plt.Circle((x1, y1), radius1, facecolor=color, edgecolor='white', alpha=0.5)
@@ -250,6 +250,43 @@ def draw_correspondences(points1: List[Tuple[float, float]], points2: List[Tuple
         ax2.add_patch(circ2_1)
         ax2.add_patch(circ2_2)
     return fig1, fig2
+
+def draw_correspondences_onefig(points1: List[Tuple[float, float]], points2: List[Tuple[float, float]],
+                         image1: Image.Image, image2: Image.Image) -> Tuple[plt.Figure, plt.Figure]:
+    """
+    draw point correspondences on images.
+    :param points1: a list of (y, x) coordinates of image1, corresponding to points2.
+    :param points2: a list of (y, x) coordinates of image2, corresponding to points1.
+    :param image1: a PIL image.
+    :param image2: a PIL image.
+    :return: two figures of images with marked points.
+    """
+    assert len(points1) == len(points2), f"points lengths are incompatible: {len(points1)} != {len(points2)}."
+    num_points = len(points1)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(24,12))
+    ax1.axis('off')
+    ax2.axis('off')
+    ax1.imshow(image1)
+    ax2.imshow(image2)
+    # if num_points > 15:
+    #     cmap = plt.get_cmap('tab10')
+    # else:
+    cmap = ListedColormap(["red", "yellow", "blue", "lime", "magenta", "indigo", "orange", "cyan", "darkgreen",
+                            "maroon", "black", "white", "chocolate", "gray", "blueviolet"])
+    colors = np.array([cmap(x % 15) for x in range(num_points)])
+    radius1, radius2 = 8, 1
+    for point1, point2, color in zip(points1, points2, colors):
+        y1, x1 = point1
+        circ1_1 = plt.Circle((x1, y1), radius1, facecolor=color, edgecolor='white', alpha=0.5)
+        circ1_2 = plt.Circle((x1, y1), radius2, facecolor=color, edgecolor='white')
+        ax1.add_patch(circ1_1)
+        ax1.add_patch(circ1_2)
+        y2, x2 = point2
+        circ2_1 = plt.Circle((x2, y2), radius1, facecolor=color, edgecolor='white', alpha=0.5)
+        circ2_2 = plt.Circle((x2, y2), radius2, facecolor=color, edgecolor='white')
+        ax2.add_patch(circ2_1)
+        ax2.add_patch(circ2_2)
+    return fig
 
 
 def chunk_cosine_sim(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -281,28 +318,29 @@ def str2bool(v):
     
     
 def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_pairs=5, load_size=224, layer=9, 
-                                                    facet='key', bin=True, thresh=0.05) -> Tuple[np.ndarray, np.ndarray]:
+                                                    facet='key', bin=True, thresh=0.05, save=True) -> Tuple[np.ndarray, np.ndarray]:
     with torch.no_grad():
         # compute point correspondences
         points1, points2, image1_pil, image2_pil, anchor_desc = find_correspondences_images(
             image1_pil, image2_pil, name1, name2, num_pairs, load_size, layer, facet, bin, thresh)
         
         points1_array = np.array([(x, y) for y, x in points1])
-        np.save("data/points_to_track/{}.npy".format(name1), points1_array)
         points2_array = np.array([(x, y) for y, x in points2])
-        np.save("data/points_to_track/{}.npy".format(name2), points2_array)
+        if save:
+            np.save("data/points_to_track/{}.npy".format(name1), points1_array)
+            np.save("data/points_to_track/{}.npy".format(name2), points2_array)
 
         curr_save_dir = Path("dino/logs/") / f"{name1}_{name2}"
         curr_save_dir.mkdir(parents=True, exist_ok=True)
 
         # saving point correspondences
-        file1 = open(curr_save_dir / "correspondence_A.txt", "w")
-        file2 = open(curr_save_dir / "correspondence_B.txt", "w")
-        for point1, point2 in zip(points1, points2):
-            file1.write(f'{point1}\n')
-            file2.write(f'{point2}\n')
-        file1.close()
-        file2.close()
+        # file1 = open(curr_save_dir / "correspondence_A.txt", "w")
+        # file2 = open(curr_save_dir / "correspondence_B.txt", "w")
+        # for point1, point2 in zip(points1, points2):
+        #     file1.write(f'{point1}\n')
+        #     file2.write(f'{point2}\n')
+        # file1.close()
+        # file2.close()
 
         fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
         fig1.savefig(curr_save_dir / '{}_corresp.png'.format(name1), bbox_inches='tight', pad_inches=0)
@@ -312,6 +350,25 @@ def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_p
     return points1_array, points2_array, anchor_desc
 
     
+def process_image_pair_og(image1_pil: Image, image2_pil: Image, name1, name2,  save_dir, num_pairs=5, load_size=224, layer=9, 
+                                                    facet='key', bin=True, thresh=0.05, save=True) -> Tuple[np.ndarray, np.ndarray]:
+    with torch.no_grad():
+        # compute point correspondences
+        points1, points2, image1_pil, image2_pil, anchor_desc = find_correspondences_images(
+            image1_pil, image2_pil, name1, name2, num_pairs, load_size, layer, facet, bin, thresh)
+        
+        points1_array = np.array([(x, y) for y, x in points1])
+        points2_array = np.array([(x, y) for y, x in points2])
+        if save:
+            np.save("data/points_to_track/{}.npy".format(name1), points1_array)
+            np.save("data/points_to_track/{}.npy".format(name2), points2_array)
+
+        curr_save_dir = Path("dino/logs/") / f"{name1}_{name2}"
+        curr_save_dir.mkdir(parents=True, exist_ok=True)
+
+        fig = draw_correspondences_onefig(points1, points2, image1_pil, image2_pil)
+    
+    return fig # points1_array, points2_array, anchor_desc
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Facilitate ViT Descriptor point correspondences.')
