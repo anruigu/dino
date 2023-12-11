@@ -78,33 +78,27 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
 
     # Select the top 'k' descriptors from bb_descs1
     top_k_bb_descs1 = bb_descs1[top_k_indices]
-    top_k_bb_descs1_normalized = top_k_bb_descs1 / np.linalg.norm(top_k_bb_descs1, axis=1)[:, None]
+    # top_k_bb_descs1_normalized = top_k_bb_descs1 / np.linalg.norm(top_k_bb_descs1, axis=1)[:, None]
 
-    for k in range(n_clusters):
-        for i, (label, rank) in enumerate(zip(kmeans.labels_, ranks)):
-            if rank > bb_topk_sims[label]:
-                bb_topk_sims[label] = rank
-                bb_indices_to_show[label] = i
+    # Get coordinates for the top k indices
+    img1_indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[top_k_indices]
+    img2_indices_to_show = nn_1[img1_indices_to_show]
 
-    # get coordinates to show
-    indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[
-        bb_indices_to_show]  # close bbs
-    img1_indices_to_show = torch.arange(num_patches1[0] * num_patches1[1], device=device)[indices_to_show]
-    img2_indices_to_show = nn_1[indices_to_show]
-    # coordinates in descriptor map's dimensions
-    img1_y_to_show = (img1_indices_to_show / num_patches1[1]).cpu().numpy()
-    img1_x_to_show = (img1_indices_to_show % num_patches1[1]).cpu().numpy()
-    img2_y_to_show = (img2_indices_to_show / num_patches2[1]).cpu().numpy()
-    img2_x_to_show = (img2_indices_to_show % num_patches2[1]).cpu().numpy()
+    # Calculate the coordinates to show
     points1, points2 = [], []
-    for y1, x1, y2, x2 in zip(img1_y_to_show, img1_x_to_show, img2_y_to_show, img2_x_to_show):
-        x1_show = (int(x1) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-        y1_show = (int(y1) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
-        x2_show = (int(x2) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-        y2_show = (int(y2) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+    for idx1, idx2 in zip(img1_indices_to_show, img2_indices_to_show):
+        y1, x1 = divmod(idx1.item(), num_patches1[1])
+        y2, x2 = divmod(idx2.item(), num_patches2[1])
+        
+        x1_show = (x1 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y1_show = (y1 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        x2_show = (x2 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y2_show = (y2 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
-    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1_normalized
+
+    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1
 
 
 
