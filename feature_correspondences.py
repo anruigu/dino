@@ -32,8 +32,7 @@ def find_correspondences_with_anchors(anchor_descriptors: np.ndarray, image2: Im
     # descriptors2_normalized = descriptors2 / np.linalg.norm(descriptors2, axis=1)[:, None]
     # print("magnitude of original descriptors: ",  np.linalg.norm(descriptors2, axis=1))
     # print("shape of original descriptors: ", descriptors2.shape)
-    # Allie temp take out normalize
-    #  descriptors2_normalized = descriptors2 / torch.norm(descriptors2, dim=1, keepdim=True)
+    #descriptors2_normalized = descriptors2 / torch.norm(descriptors2, dim=1, keepdim=True)
 
     # Calculate similarities and find best matches for each anchor descriptor
     # Allie temp take out normalize
@@ -66,8 +65,8 @@ def find_correspondences_with_anchors(anchor_descriptors: np.ndarray, image2: Im
         # Extract the matched descriptor
         descriptors2_matched.append(descriptors2[:, :, match_index].cpu().numpy())
     descriptors2_matched = np.array(descriptors2_matched).reshape(num_pairs, -1)
-
-    return points2, image2_pil, descriptors2_matched
+    descriptors2_matched_normalized = descriptors2_matched / np.linalg.norm(descriptors2_matched, axis=1, keepdims=True)
+    return points2, image2_pil, descriptors2_matched_normalized
 
 def draw_correspondences(points2: List[Tuple[float, float]], image2: Image.Image) -> Tuple[plt.Figure, plt.Figure]:
     """
