@@ -70,35 +70,68 @@ def find_correspondences_images(image1: Image, image2: Image, name1, name2, num_
     bb_cls_attn = (bb_cls_attn1 + bb_cls_attn2) / 2
     ranks = bb_cls_attn
 
-    _, sorted_indices = torch.sort(bb_cls_attn, descending=True)
-    # sorted_indices = np.argsort(-bb_cls_attn)
 
-    # Select the top 'k' indices
-    top_k_indices = sorted_indices[:num_pairs].cpu().numpy()
+    for k in range(n_clusters):
+        for i, (label, rank) in enumerate(zip(kmeans.labels_, ranks)):
+            if rank > bb_topk_sims[label]:
+                bb_topk_sims[label] = rank
+                bb_indices_to_show[label] = i
 
-    # Select the top 'k' descriptors from bb_descs1
-    top_k_bb_descs1 = bb_descs1[top_k_indices]
-    top_k_bb_descs1_normalized = top_k_bb_descs1 / np.linalg.norm(top_k_bb_descs1, axis=1)[:, None]
-
-    # Get coordinates for the top k indices
-    img1_indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[top_k_indices]
-    img2_indices_to_show = nn_1[img1_indices_to_show]
-
-    # Calculate the coordinates to show
+    # get coordinates to show
+    indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[
+        bb_indices_to_show]  # close bbs
+    img1_indices_to_show = torch.arange(num_patches1[0] * num_patches1[1], device=device)[indices_to_show]
+    img2_indices_to_show = nn_1[indices_to_show]
+    
+    top_k_normalized_descriptors = normalized[bb_indices_to_show.astype(int)]
+    top_k_descriptors_bb_descs1 = top_k_normalized_descriptors[:, :6528]
+    # normalize
+    top_k_descriptors_bb_descs1 = top_k_descriptors_bb_descs1 / np.linalg.norm(top_k_descriptors_bb_descs1, axis=1)[:, None]
+    
+    # coordinates in descriptor map's dimensions
+    img1_y_to_show = (img1_indices_to_show / num_patches1[1]).cpu().numpy()
+    img1_x_to_show = (img1_indices_to_show % num_patches1[1]).cpu().numpy()
+    img2_y_to_show = (img2_indices_to_show / num_patches2[1]).cpu().numpy()
+    img2_x_to_show = (img2_indices_to_show % num_patches2[1]).cpu().numpy()
     points1, points2 = [], []
-    for idx1, idx2 in zip(img1_indices_to_show, img2_indices_to_show):
-        y1, x1 = divmod(idx1.item(), num_patches1[1])
-        y2, x2 = divmod(idx2.item(), num_patches2[1])
-        
-        x1_show = (x1 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-        y1_show = (y1 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
-        x2_show = (x2 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
-        y2_show = (y2 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
-        
+    for y1, x1, y2, x2 in zip(img1_y_to_show, img1_x_to_show, img2_y_to_show, img2_x_to_show):
+        x1_show = (int(x1) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y1_show = (int(y1) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        x2_show = (int(x2) - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+        y2_show = (int(y2) - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
         points1.append((y1_show, x1_show))
         points2.append((y2_show, x2_show))
 
-    return points1, points2, image1_pil, image2_pil, top_k_bb_descs1_normalized
+    #  bb_descs1_normalized = bb_descs1 / np.linalg.norm(bb_descs1, axis=1)[:, None]
+    # _, sorted_indices = torch.sort(bb_cls_attn, descending=True)
+    # # sorted_indices = np.argsort(-bb_cls_attn)
+
+    # # Select the top 'k' indices
+    # top_k_indices = sorted_indices[:num_pairs].cpu().numpy()
+
+    # # Select the top 'k' descriptors from bb_descs1
+    # top_k_bb_descs1 = bb_descs1[top_k_indices]
+    # top_k_bb_descs1_normalized = top_k_bb_descs1 / np.linalg.norm(top_k_bb_descs1, axis=1)[:, None]
+
+    # # Get coordinates for the top k indices
+    # img1_indices_to_show = torch.nonzero(bbs_mask, as_tuple=False).squeeze(dim=1)[top_k_indices]
+    # img2_indices_to_show = nn_1[img1_indices_to_show]
+
+    # # Calculate the coordinates to show
+    # points1, points2 = [], []
+    # for idx1, idx2 in zip(img1_indices_to_show, img2_indices_to_show):
+    #     y1, x1 = divmod(idx1.item(), num_patches1[1])
+    #     y2, x2 = divmod(idx2.item(), num_patches2[1])
+        
+    #     x1_show = (x1 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+    #     y1_show = (y1 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+    #     x2_show = (x2 - 1) * extractor.stride[1] + extractor.stride[1] + extractor.p // 2
+    #     y2_show = (y2 - 1) * extractor.stride[0] + extractor.stride[0] + extractor.p // 2
+        
+    #     points1.append((y1_show, x1_show))
+    #     points2.append((y2_show, x2_show))
+
+    return points1, points2, image1_pil, image2_pil, top_k_descriptors_bb_descs1
 
 
 
@@ -314,7 +347,6 @@ def str2bool(v):
 def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_pairs=5, load_size=224, layer=9, 
                                                     facet='key', bin=True, thresh=0.05) -> Tuple[np.ndarray, np.ndarray]:
     with torch.no_grad():
-        # compute point correspondences
         points1, points2, image1_pil, image2_pil, anchor_desc = find_correspondences_images(
             image1_pil, image2_pil, name1, name2, num_pairs, load_size, layer, facet, bin, thresh)
         
@@ -322,15 +354,6 @@ def process_image_pair(image1_pil: Image, image2_pil: Image, name1, name2, num_p
         points2_array = np.array([(x, y) for y, x in points2])
         curr_save_dir = Path("dino/logs/") / f"{name1}_{name2}"
         curr_save_dir.mkdir(parents=True, exist_ok=True)
-
-        # saving point correspondences
-        # file1 = open(curr_save_dir / "correspondence_A.txt", "w")
-        # file2 = open(curr_save_dir / "correspondence_B.txt", "w")
-        # for point1, point2 in zip(points1, points2):
-        #     file1.write(f'{point1}\n')
-        #     file2.write(f'{point2}\n')
-        # file1.close()
-        # file2.close()
 
         fig1, fig2 = draw_correspondences(points1, points2, image1_pil, image2_pil)
         fig1.savefig(curr_save_dir / '{}_corresp.png'.format(name1), bbox_inches='tight', pad_inches=0)
