@@ -1,4 +1,10 @@
-# dino-vit-features
+# coformer / dino-vit-features
+Relevant files:
+`feature_correspondences.py`: contains functions used by cogen and the dino server that return feature-based point matching between 2 images.
+`correspondences.py`: contains functions used by cogen that finds the most salient points on the anchor image. Also used for quick prototying by uploading two images: see Point Correspondences section below.
+In `extractor.py` I also added preprocess_pil to allow directly passing in PIL Images in the pipeline.
+
+# [original README] dino-vit-features
 [[paper](https://arxiv.org/abs/2112.05814)] [[project page](https://dino-vit-features.github.io)]
 
 Official implementation of the paper "Deep ViT Features as Dense Visual Descriptors".

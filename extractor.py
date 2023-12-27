@@ -167,7 +167,6 @@ class ViTExtractor:
                     (1) the preprocessed image as a tensor to insert the model of shape BxCxHxW.
                     (2) the pil image in relevant dimensions
         """
-        #pil_image = Image.open(image_path).convert('RGB')
         pil_image = pil_image.convert('RGB')
         if load_size is not None:
             pil_image = transforms.Resize(load_size, interpolation=transforms.InterpolationMode.LANCZOS)(pil_image)
