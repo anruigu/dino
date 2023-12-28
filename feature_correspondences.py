@@ -173,7 +173,6 @@ def process_new_image(
         points2, processed_image2_pil, desc2 = find_correspondences_with_anchors(
             anchor_descriptors,
             image2_pil,
-            name2,
             num_pairs,
             load_size,
             layer,

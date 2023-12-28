@@ -457,8 +457,6 @@ def process_image_pair(
         ) = find_correspondences_images(
             image1_pil,
             image2_pil,
-            name1,
-            name2,
             num_pairs,
             load_size,
             layer,
@@ -512,8 +510,6 @@ def process_image_pair_og(
         ) = find_correspondences_images(
             image1_pil,
             image2_pil,
-            name1,
-            name2,
             num_pairs,
             load_size,
             layer,
